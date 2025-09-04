@@ -159,6 +159,34 @@
             color: #666;
             margin-top: 2px;
         }
+
+        .effect-demo {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .pixel-grid {
+            display: inline-block;
+            margin: 0 10px;
+        }
+
+        .pixel-block {
+            width: 8px;
+            height: 8px;
+            display: inline-block;
+            border: 1px solid #ccc;
+            margin: 1px;
+        }
+
+        .demo-arrow {
+            font-size: 20px;
+            color: #144eb9;
+            margin: 0 15px;
+        }
         
         .preview-section {
             display: grid;
@@ -258,24 +286,36 @@
         
         <div class="controls">
             <div class="control-group">
-                <label>像素化强度:</label>
+                <label>像素化强度 (快速调节):</label>
                 <div class="slider-container">
                     <input type="range" id="pixelationSlider" class="slider" min="1" max="50" value="10" oninput="updatePixelationPreview()">
                     <span class="slider-value" id="sliderValue">10x</span>
                 </div>
-                <small style="color: #666;">拖动滑块实时预览效果</small>
+                <small style="color: #666;">
+                    拖动滑块实时预览效果<br>
+                    • 1x = 原图不变 • 10x = 适中效果 • 50x = 极度像素化
+                </small>
             </div>
             <div class="control-group">
-                <label>高级设置:</label>
+                <label>高级设置 (独立控制XY轴):</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div>
-                        <label style="font-size: 12px;">X轴倍数:</label>
+                        <label style="font-size: 12px;">X轴倍数 (宽度压缩):</label>
                         <input type="number" id="pixelationX" value="10" min="1" max="100" onchange="updatePixelationPreview()">
                     </div>
                     <div>
-                        <label style="font-size: 12px;">Y轴倍数:</label>
+                        <label style="font-size: 12px;">Y轴倍数 (高度压缩):</label>
                         <input type="number" id="pixelationY" value="10" min="1" max="100" onchange="updatePixelationPreview()">
                     </div>
+                </div>
+                <small style="color: #666;">
+                    • X轴=5, Y轴=10 → 横向5像素、纵向10像素合并为1像素<br>
+                    • 不同XY值可创造拉伸效果
+                </small>
+                
+                <div class="effect-demo" id="effectDemo">
+                    <div style="margin-bottom: 10px; font-weight: bold; color: #333;">像素化原理演示</div>
+                    <div id="pixelDemoContent">选择图片后查看实时演示</div>
                 </div>
             </div>
         </div>
@@ -483,6 +523,64 @@
             document.getElementById('pixelatedPixels').textContent = pixelatedPixelCount.toLocaleString();
             document.getElementById('compressionRatio').textContent = compressionRatio.toFixed(1) + 'x';
             document.getElementById('reductionPercent').textContent = reductionPercent.toFixed(1) + '%';
+            
+            // 更新原理演示
+            updatePixelDemo();
+        }
+
+        function updatePixelDemo() {
+            const pixelationX = parseInt(document.getElementById('pixelationX').value);
+            const pixelationY = parseInt(document.getElementById('pixelationY').value);
+            const demoContent = document.getElementById('pixelDemoContent');
+            
+            if (!originalBitmap) {
+                demoContent.innerHTML = '选择图片后查看实时演示';
+                return;
+            }
+            
+            // 计算实际尺寸变化
+            const originalWidth = originalBitmap.width;
+            const originalHeight = originalBitmap.height;
+            const newWidth = Math.ceil(originalWidth / pixelationX);
+            const newHeight = Math.ceil(originalHeight / pixelationY);
+            
+            demoContent.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap;">
+                    <div style="text-align: center; margin: 10px;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">原始像素块</div>
+                        <div style="border: 2px solid #28a745; padding: 5px; display: inline-block;">
+                            ${createPixelGrid(pixelationX, pixelationY, '#e3f2fd')}
+                        </div>
+                        <div style="font-size: 11px; margin-top: 3px;">${pixelationX}×${pixelationY} = ${pixelationX * pixelationY}像素</div>
+                    </div>
+                    
+                    <div class="demo-arrow">→</div>
+                    
+                    <div style="text-align: center; margin: 10px;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">合并后</div>
+                        <div style="border: 2px solid #144eb9; padding: 5px; display: inline-block;">
+                            ${createPixelGrid(1, 1, '#144eb9')}
+                        </div>
+                        <div style="font-size: 11px; margin-top: 3px;">1像素(平均色)</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd; font-size: 12px;">
+                    <strong>尺寸变化:</strong> ${originalWidth}×${originalHeight} → ${newWidth}×${newHeight}<br>
+                    <strong>处理方式:</strong> 每${pixelationX}×${pixelationY}个像素合并成1个像素
+                </div>
+            `;
+        }
+
+        function createPixelGrid(width, height, color) {
+            let grid = '';
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    grid += `<div class="pixel-block" style="background-color: ${color};"></div>`;
+                }
+                if (y < height - 1) grid += '<br>';
+            }
+            return grid;
         }
 
         async function processImage() {
