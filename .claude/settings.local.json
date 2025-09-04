@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/D:\\code\\WplaceBlueMarble-Chrome-Extension/**)",
+      "Read(/D:\\code\\WplaceBlueMarble-Chrome-Extension/**)",
+      "Read(/D:\\code\\WplaceBlueMarble-Chrome-Extension/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
