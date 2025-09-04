@@ -86,6 +86,79 @@
             border-radius: 4px;
             font-size: 14px;
         }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #144eb9;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #144eb9;
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            display: inline-block;
+            background: #144eb9;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .stats {
+            background: #e8f4fd;
+            border: 1px solid #b8daff;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: monospace;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: #144eb9;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
         
         .preview-section {
             display: grid;
@@ -185,20 +258,46 @@
         
         <div class="controls">
             <div class="control-group">
-                <label>X轴像素化倍数:</label>
-                <input type="number" id="pixelationX" value="20" min="1" max="100">
+                <label>像素化强度:</label>
+                <div class="slider-container">
+                    <input type="range" id="pixelationSlider" class="slider" min="1" max="50" value="10" oninput="updatePixelationPreview()">
+                    <span class="slider-value" id="sliderValue">10x</span>
+                </div>
+                <small style="color: #666;">拖动滑块实时预览效果</small>
             </div>
             <div class="control-group">
-                <label>Y轴像素化倍数:</label>
-                <input type="number" id="pixelationY" value="20" min="1" max="100">
+                <label>高级设置:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label style="font-size: 12px;">X轴倍数:</label>
+                        <input type="number" id="pixelationX" value="10" min="1" max="100" onchange="updatePixelationPreview()">
+                    </div>
+                    <div>
+                        <label style="font-size: 12px;">Y轴倍数:</label>
+                        <input type="number" id="pixelationY" value="10" min="1" max="100" onchange="updatePixelationPreview()">
+                    </div>
+                </div>
             </div>
-            <div class="control-group">
-                <label>大小阈值 (像素):</label>
-                <input type="number" id="sizeThreshold" value="100" min="10">
-            </div>
-            <div class="control-group">
-                <label>像素数阈值:</label>
-                <input type="number" id="pixelThreshold" value="10000" min="100">
+        </div>
+
+        <div class="stats" id="imageStats" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number" id="originalPixels">0</div>
+                    <div class="stat-label">原始像素</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="pixelatedPixels">0</div>
+                    <div class="stat-label">像素化后</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="compressionRatio">0x</div>
+                    <div class="stat-label">压缩比</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="reductionPercent">0%</div>
+                    <div class="stat-label">减少比例</div>
+                </div>
             </div>
         </div>
         
@@ -268,6 +367,9 @@
             currentFile = file;
             processBtn.disabled = false;
             
+            // 创建ImageBitmap用于实时预览
+            originalBitmap = await createImageBitmap(file);
+            
             // 显示原图预览
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -276,78 +378,121 @@
                     <img src="${e.target.result}" class="preview-image" alt="原图预览">
                     <div style="margin-top: 10px; font-size: 12px; color: #666;">
                         文件名: ${file.name}<br>
-                        大小: ${(file.size / 1024).toFixed(2)} KB
+                        大小: ${(file.size / 1024).toFixed(2)} KB<br>
+                        尺寸: ${originalBitmap.width} × ${originalBitmap.height}
                     </div>
                 `;
+                
+                // 显示统计信息
+                document.getElementById('imageStats').style.display = 'block';
+                updateImageStats();
+                
+                // 立即显示像素化预览
+                updatePixelationPreview();
             };
             reader.readAsDataURL(file);
             
             status.textContent = `已选择文件: ${file.name}`;
         }
 
+        function updateSliderValue() {
+            const slider = document.getElementById('pixelationSlider');
+            const pixelationX = document.getElementById('pixelationX');
+            const pixelationY = document.getElementById('pixelationY');
+            const sliderValue = document.getElementById('sliderValue');
+            
+            const value = slider.value;
+            sliderValue.textContent = value + 'x';
+            pixelationX.value = value;
+            pixelationY.value = value;
+        }
+
+        async function updatePixelationPreview() {
+            if (!originalBitmap) return;
+            
+            const slider = document.getElementById('pixelationSlider');
+            const pixelationX = document.getElementById('pixelationX');
+            const pixelationY = document.getElementById('pixelationY');
+            
+            // 同步滑块和输入框
+            if (document.activeElement === slider) {
+                updateSliderValue();
+            }
+            
+            const xValue = parseInt(pixelationX.value);
+            const yValue = parseInt(pixelationY.value);
+            
+            try {
+                // 应用像素化
+                const pixelatedBitmap = await applyPixelation(originalBitmap, xValue, yValue);
+                
+                // 更新预览
+                displayPixelatedPreview(pixelatedBitmap, xValue, yValue);
+                
+                // 更新统计
+                updateImageStats(pixelatedBitmap.width * pixelatedBitmap.height);
+                
+            } catch (error) {
+                console.error('实时预览出错:', error);
+            }
+        }
+
+        function displayPixelatedPreview(pixelatedBitmap, pixelationX, pixelationY) {
+            const pixelatedPreview = document.getElementById('pixelatedPreview');
+            
+            // 计算显示尺寸
+            const maxDisplaySize = 400;
+            const scale = Math.min(maxDisplaySize / pixelatedBitmap.width, maxDisplaySize / pixelatedBitmap.height);
+            const displayWidth = Math.floor(pixelatedBitmap.width * scale);
+            const displayHeight = Math.floor(pixelatedBitmap.height * scale);
+            
+            pixelatedPreview.innerHTML = `
+                <canvas width="${displayWidth}" height="${displayHeight}" 
+                        class="preview-image" style="border: 1px solid #eee; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;"></canvas>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    像素化尺寸: ${pixelatedBitmap.width} × ${pixelatedBitmap.height}<br>
+                    像素化倍数: ${pixelationX} × ${pixelationY}
+                </div>
+            `;
+            
+            const previewCanvas = pixelatedPreview.querySelector('canvas');
+            const previewCtx = previewCanvas.getContext('2d');
+            previewCtx.imageSmoothingEnabled = false;
+            previewCtx.drawImage(pixelatedBitmap, 0, 0, displayWidth, displayHeight);
+        }
+
+        function updateImageStats(pixelatedPixelCount = null) {
+            if (!originalBitmap) return;
+            
+            const originalPixelCount = originalBitmap.width * originalBitmap.height;
+            
+            // 计算当前设置下的像素化结果
+            if (pixelatedPixelCount === null) {
+                const pixelationX = parseInt(document.getElementById('pixelationX').value);
+                const pixelationY = parseInt(document.getElementById('pixelationY').value);
+                const newWidth = Math.ceil(originalBitmap.width / pixelationX);
+                const newHeight = Math.ceil(originalBitmap.height / pixelationY);
+                pixelatedPixelCount = newWidth * newHeight;
+            }
+            
+            const compressionRatio = originalPixelCount / pixelatedPixelCount;
+            const reductionPercent = ((originalPixelCount - pixelatedPixelCount) / originalPixelCount * 100);
+            
+            // 格式化数字显示
+            document.getElementById('originalPixels').textContent = originalPixelCount.toLocaleString();
+            document.getElementById('pixelatedPixels').textContent = pixelatedPixelCount.toLocaleString();
+            document.getElementById('compressionRatio').textContent = compressionRatio.toFixed(1) + 'x';
+            document.getElementById('reductionPercent').textContent = reductionPercent.toFixed(1) + '%';
+        }
+
         async function processImage() {
-            if (!currentFile) {
+            if (!originalBitmap) {
                 alert('请先选择图片文件！');
                 return;
             }
-
-            processBtn.disabled = true;
-            status.textContent = '正在处理图片...';
-
-            try {
-                // 创建ImageBitmap
-                originalBitmap = await createImageBitmap(currentFile);
-                
-                const pixelationX = parseInt(document.getElementById('pixelationX').value);
-                const pixelationY = parseInt(document.getElementById('pixelationY').value);
-                const sizeThreshold = parseInt(document.getElementById('sizeThreshold').value);
-                const pixelThreshold = parseInt(document.getElementById('pixelThreshold').value);
-                
-                status.textContent = `正在应用 ${pixelationX}x${pixelationY} 像素化...`;
-                
-                // 应用像素化
-                const pixelatedBitmap = await applyPixelation(originalBitmap, pixelationX, pixelationY);
-                
-                // 显示像素化预览
-                const canvas = document.createElement('canvas');
-                canvas.width = pixelatedBitmap.width;
-                canvas.height = pixelatedBitmap.height;
-                const ctx = canvas.getContext('2d');
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(pixelatedBitmap, 0, 0);
-                
-                const pixelatedPreview = document.getElementById('pixelatedPreview');
-                
-                // 计算显示尺寸，确保像素化效果明显
-                const maxDisplaySize = 400;
-                const scale = Math.min(maxDisplaySize / pixelatedBitmap.width, maxDisplaySize / pixelatedBitmap.height);
-                const displayWidth = Math.floor(pixelatedBitmap.width * scale);
-                const displayHeight = Math.floor(pixelatedBitmap.height * scale);
-                
-                pixelatedPreview.innerHTML = `
-                    <canvas width="${displayWidth}" height="${displayHeight}" 
-                            class="preview-image" style="border: 1px solid #eee; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;"></canvas>
-                    <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                        原始尺寸: ${originalBitmap.width} × ${originalBitmap.height}<br>
-                        像素化尺寸: ${pixelatedBitmap.width} × ${pixelatedBitmap.height}<br>
-                        像素化倍数: ${pixelationX} × ${pixelationY}<br>
-                        压缩比: ${((originalBitmap.width * originalBitmap.height) / (pixelatedBitmap.width * pixelatedBitmap.height)).toFixed(1)}x
-                    </div>
-                `;
-                
-                const previewCanvas = pixelatedPreview.querySelector('canvas');
-                const previewCtx = previewCanvas.getContext('2d');
-                previewCtx.imageSmoothingEnabled = false;
-                previewCtx.drawImage(pixelatedBitmap, 0, 0, displayWidth, displayHeight);
-                
-                status.textContent = '像素化转换完成！';
-                
-            } catch (error) {
-                console.error('处理图片时出错:', error);
-                status.textContent = '处理图片时出错: ' + error.message;
-            } finally {
-                processBtn.disabled = false;
-            }
+            
+            // 由于已经有实时预览，这里只是更新状态
+            status.textContent = '像素化转换完成！可以调节滑块查看不同效果';
         }
 
         // 像素化处理函数，基于content.js的实现
