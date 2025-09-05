@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图片像素化转换器</title>
+    <title>图片&文字像素化转换器</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -275,13 +275,39 @@
 </head>
 <body>
     <div class="container">
-        <h1>图片像素化转换器</h1>
+        <h1>图片&文字像素化转换器</h1>
         
         <div class="upload-section" id="uploadSection">
-            <input type="file" id="fileInput" class="file-input" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif">
-            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">选择图片文件</button>
-            <p>或拖拽图片文件到此处</p>
-            <p><small>支持 PNG, JPEG, WebP, BMP, GIF 格式</small></p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+                <div style="text-align: center;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">📷 图片像素化</h3>
+                    <input type="file" id="fileInput" class="file-input" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif">
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">选择图片文件</button>
+                    <p style="margin: 10px 0 5px 0;">或拖拽图片文件到此处</p>
+                    <p><small>支持 PNG, JPEG, WebP, BMP, GIF 格式</small></p>
+                </div>
+                
+                <div style="text-align: center;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">✍️ 文字像素化</h3>
+                    <input type="text" id="textInput" placeholder="输入要像素化的文字" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; margin-bottom: 10px;" oninput="previewText()">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <select id="textFont" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="previewText()">
+                            <option value="Arial">Arial</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Verdana">Verdana</option>
+                            <option value="Comic Sans MS">Comic Sans MS</option>
+                        </select>
+                        <input type="number" id="textSize" value="48" min="20" max="200" placeholder="字体大小" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;" oninput="previewText()">
+                    </div>
+                    <div id="textPreview" style="min-height: 60px; border: 1px dashed #ddd; border-radius: 4px; padding: 10px; margin-bottom: 10px; background: #f9f9f9; display: flex; align-items: center; justify-content: center;">
+                        <span style="color: #999; font-style: italic;">输入文字查看预览</span>
+                    </div>
+                    <button class="upload-btn" onclick="generateTextImage()">生成并像素化</button>
+                    <p><small>支持中英文、数字、符号</small></p>
+                </div>
+            </div>
         </div>
         
         <div class="controls">
@@ -365,6 +391,7 @@
     <script>
         let currentFile = null;
         let originalBitmap = null;
+        let isTextMode = false;
 
         // 拖拽功能
         const uploadSection = document.getElementById('uploadSection');
@@ -433,6 +460,102 @@
             reader.readAsDataURL(file);
             
             status.textContent = `已选择文件: ${file.name}`;
+            isTextMode = false;
+        }
+
+        async function generateTextImage() {
+            const text = document.getElementById('textInput').value.trim();
+            const font = document.getElementById('textFont').value;
+            const fontSize = parseInt(document.getElementById('textSize').value);
+            
+            if (!text) {
+                alert('请输入要像素化的文字！');
+                return;
+            }
+            
+            // 创建临时canvas来渲染文字
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 设置字体
+            ctx.font = `${fontSize}px "${font}"`;
+            ctx.fillStyle = '#333333';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            
+            // 测量文字尺寸
+            const metrics = ctx.measureText(text);
+            const textWidth = Math.ceil(metrics.width);
+            const textHeight = Math.ceil(fontSize * 1.2); // 给文字留一些上下空间
+            
+            // 设置canvas尺寸
+            canvas.width = textWidth + 40; // 左右各留20px边距
+            canvas.height = textHeight + 40; // 上下各留20px边距
+            
+            // 重新设置字体（canvas尺寸改变后需要重新设置）
+            ctx.font = `${fontSize}px "${font}"`;
+            ctx.fillStyle = '#333333';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            
+            // 填充白色背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制文字
+            ctx.fillStyle = '#333333';
+            ctx.fillText(text, 20, 20);
+            
+            // 转换为ImageBitmap
+            originalBitmap = await createImageBitmap(canvas);
+            currentFile = null;
+            isTextMode = true;
+            processBtn.disabled = false;
+            
+            // 显示原图预览
+            const originalPreview = document.getElementById('originalPreview');
+            originalPreview.innerHTML = `
+                <canvas class="preview-image" width="${canvas.width}" height="${canvas.height}" style="border: 1px solid #eee;"></canvas>
+                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                    文字内容: "${text}"<br>
+                    字体: ${font} ${fontSize}px<br>
+                    尺寸: ${canvas.width} × ${canvas.height}
+                </div>
+            `;
+            
+            const previewCanvas = originalPreview.querySelector('canvas');
+            const previewCtx = previewCanvas.getContext('2d');
+            previewCtx.drawImage(canvas, 0, 0);
+            
+            // 显示统计信息
+            document.getElementById('imageStats').style.display = 'block';
+            updateImageStats();
+            
+            // 立即显示像素化预览
+            updatePixelationPreview();
+            
+            status.textContent = `已生成文字图片: "${text}"`;
+        }
+
+        function previewText() {
+            const text = document.getElementById('textInput').value.trim();
+            const font = document.getElementById('textFont').value;
+            const fontSize = parseInt(document.getElementById('textSize').value) || 48;
+            const preview = document.getElementById('textPreview');
+            
+            if (!text) {
+                preview.innerHTML = '<span style="color: #999; font-style: italic;">输入文字查看预览</span>';
+                return;
+            }
+            
+            // 计算合适的预览字体大小（最大30px）
+            const previewSize = Math.min(fontSize * 0.6, 30);
+            
+            preview.innerHTML = `
+                <div style="font-family: '${font}'; font-size: ${previewSize}px; color: #333; text-align: center; line-height: 1.2;">
+                    ${text}
+                </div>
+            `;
         }
 
         function updateSliderValue() {
